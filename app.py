@@ -2,46 +2,73 @@ import streamlit as st
 import joblib
 import pickle
 import numpy as np
-
 import psycopg2
-# Fetch variables
-USER = "postgres.yuhxymowxtckzpqptmnz" #os.getenv("user")
-PASSWORD = "gDJ2zSM2mmnuXMRk"# os.getenv("password")
-HOST = "aws-1-us-west-2.pooler.supabase.com" #os.getenv("host")
-PORT = "6543" #os.getenv("port")
-DBNAME = "postgres" #os.getenv("dbname")
+from datetime import datetime
 
-# Configuración de la página
+# Configuración de la base de datos
+USER = "postgres.yuhxymowxtckzpqptmnz"
+PASSWORD = "gDJ2zSM2mmnuXMRk"
+HOST = "aws-1-us-west-2.pooler.supabase.com"
+PORT = "6543"
+DBNAME = "postgres"
+
 st.set_page_config(page_title="Predictor de Iris", page_icon="🌸")
-# Connect to the database
-try:
-    connection = psycopg2.connect(
-        user=USER,
-        password=PASSWORD,
-        host=HOST,
-        port=PORT,
-        dbname=DBNAME
+
+# --- FUNCIONES DE BASE DE DATOS ---
+
+def get_connection():
+    return psycopg2.connect(
+        user=USER, password=PASSWORD, host=HOST, port=PORT, dbname=DBNAME
     )
-    print("Connection successful!")
-    
-    # Create a cursor to execute SQL queries
-    cursor = connection.cursor()
-    
-    # Example query
-    cursor.execute("SELECT NOW();")
-    result = cursor.fetchone()
-    print("Current Time:", result)
-    # Close the cursor and connection
-    cursor.close()
-    connection.close()
-    print("Connection closed.")
 
-except Exception as e:
-    st.write(str(e))
+def init_db():
+    """Crea la tabla si no existe"""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS historial_predicciones (
+            id SERIAL PRIMARY KEY,
+            fecha TIMESTAMP,
+            sepal_length FLOAT,
+            sepal_width FLOAT,
+            petal_length FLOAT,
+            petal_width FLOAT,
+            especie_predicha TEXT,
+            confianza FLOAT
+        );
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
 
+def save_prediction(sl, sw, pl, pw, species, confidence):
+    """Guarda el registro en la DB"""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO historial_predicciones 
+        (fecha, sepal_length, sepal_width, petal_length, petal_width, especie_predicha, confianza)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+    """, (datetime.now(), sl, sw, pl, pw, species, confidence))
+    conn.commit()
+    cur.close()
+    conn.close()
 
+def get_history():
+    """Obtiene los registros ordenados por fecha descendente"""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT fecha, especie_predicha, confianza FROM historial_predicciones ORDER BY fecha DESC LIMIT 10")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return rows
 
-# Función para cargar los modelos
+# --- LÓGICA DE LA APP ---
+
+# Inicializar tabla al arrancar
+init_db()
+
 @st.cache_resource
 def load_models():
     try:
@@ -50,46 +77,50 @@ def load_models():
         with open('componets/model_info.pkl', 'rb') as f:
             model_info = pickle.load(f)
         return model, scaler, model_info
-    except FileNotFoundError:
-        st.error("No se encontraron los archivos del modelo en la carpeta 'models/'")
+    except Exception:
+        st.error("Error al cargar archivos del modelo.")
         return None, None, None
 
-# Título
 st.title("🌸 Predictor de Especies de Iris")
-
-# Cargar modelos
 model, scaler, model_info = load_models()
 
 if model is not None:
-    # Inputs
     st.header("Ingresa las características de la flor:")
-    st.write(result)
     
-    sepal_length = st.number_input("Longitud del Sépalo (cm)", min_value=0.0, max_value=10.0, value=5.0, step=0.1)
-    sepal_width = st.number_input("Ancho del Sépalo (cm)", min_value=0.0, max_value=10.0, value=3.0, step=0.1)
-    petal_length = st.number_input("Longitud del Pétalo (cm)", min_value=0.0, max_value=10.0, value=4.0, step=0.1)
-    petal_width = st.number_input("Ancho del Pétalo (cm)", min_value=0.0, max_value=10.0, value=1.0, step=0.1)
+    col1, col2 = st.columns(2)
+    with col1:
+        sepal_length = st.number_input("Longitud Sépalo (cm)", 0.0, 10.0, 5.0)
+        sepal_width = st.number_input("Ancho Sépalo (cm)", 0.0, 10.0, 3.0)
+    with col2:
+        petal_length = st.number_input("Longitud Pétalo (cm)", 0.0, 10.0, 4.0)
+        petal_width = st.number_input("Ancho Pétalo (cm)", 0.0, 10.0, 1.0)
     
-    # Botón de predicción
     if st.button("Predecir Especie"):
-        # Preparar datos
         features = np.array([[sepal_length, sepal_width, petal_length, petal_width]])
-        
-        # Estandarizar
         features_scaled = scaler.transform(features)
         
-        # Predecir
         prediction = model.predict(features_scaled)[0]
         probabilities = model.predict_proba(features_scaled)[0]
         
-        # Mostrar resultado
         target_names = model_info['target_names']
         predicted_species = target_names[prediction]
+        confidence = float(max(probabilities))
         
-        st.success(f"Especie predicha: **{predicted_species}**")
-        st.write(f"Confianza: **{max(probabilities):.1%}**")
+        # 1. Mostrar resultado actual
+        st.success(f"Especie predicha: **{predicted_species}** (Confianza: {confidence:.1%})")
         
-        # Mostrar todas las probabilidades
-        st.write("Probabilidades:")
-        for species, prob in zip(target_names, probabilities):
-            st.write(f"- {species}: {prob:.1%}")
+        # 2. GUARDAR EN BASE DE DATOS
+        save_prediction(sepal_length, sepal_width, petal_length, petal_width, predicted_species, confidence)
+
+    # --- SECCIÓN DE HISTORIAL ---
+    st.markdown("---")
+    st.subheader("📜 Historial de Ejecuciones (Últimas 10)")
+    
+    history = get_history()
+    if history:
+        # Formatear datos para mostrar en una tabla
+        for res in history:
+            # res[0] es la fecha, res[1] especie, res[2] confianza
+            st.write(f"⏱ **{res[0].strftime('%Y-%m-%d %H:%M:%S')}** | 🏷 {res[1]} | ✅ {res[2]:.1%}")
+    else:
+        st.info("Aún no hay registros en el historial.")
