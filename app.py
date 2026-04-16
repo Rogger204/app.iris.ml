@@ -45,9 +45,9 @@ except Exception as e:
 @st.cache_resource
 def load_models():
     try:
-        model = joblib.load('components/iris_model.pkl')
-        scaler = joblib.load('components/iris_scaler.pkl')
-        with open('components/model_info.pkl', 'rb') as f:
+        model = joblib.load('componets/iris_model.pkl')
+        scaler = joblib.load('componets/iris_scaler.pkl')
+        with open('componets/model_info.pkl', 'rb') as f:
             model_info = pickle.load(f)
         return model, scaler, model_info
     except FileNotFoundError:
