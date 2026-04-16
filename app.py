@@ -95,7 +95,7 @@ if model is not None:
         # --- EL PASO CLAVE: Guardar usando los nombres de tu tabla ---
         # l_p = petal_length, l_s = sepal_length, a_s = sepal_width, a_p = petal_width
         save_prediction(petal_length, sepal_length, sepal_width, petal_width, predicted_species)
-        st.info("¡Datos enviados a la tabla ml.irir_data!")
+        st.info("¡Datos enviados a la tabla ml.Irir_data!")
 
     # --- SECCIÓN DE HISTORIAL ---
     st.markdown("---")
