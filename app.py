@@ -28,7 +28,7 @@ def save_prediction(l_p, l_s, a_s, a_p, prediccion):
         cur = conn.cursor()
         # IMPORTANTE: Usamos "ml"."irir_data" para que coincida con tu imagen
         query = """
-            INSERT INTO "ml"."irir_data" 
+            INSERT INTO "ml"."Irir_data" 
             (created_at, l_p, l_s, a_s, a_p, prediccion)
             VALUES (%s, %s, %s, %s, %s, %s)
         """
@@ -106,4 +106,4 @@ if model is not None:
         for res in history:
             st.write(f"⏱ `{res[0].strftime('%H:%M:%S')}` | 🌸 Especie: **{res[1]}**")
     else:
-        st.info("No hay datos en ml.irir_data aún.")
+        st.info("No hay datos en ml.Irir_data aún.")
