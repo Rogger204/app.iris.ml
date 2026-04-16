@@ -45,7 +45,7 @@ def get_history():
         conn = get_connection()
         cur = conn.cursor()
         # Traemos los datos de la tabla correcta
-        cur.execute('SELECT created_at, prediccion FROM "ml"."irir_data" ORDER BY created_at DESC LIMIT 10')
+        cur.execute('SELECT created_at, prediccion FROM "ml"."Irir_data" ORDER BY created_at DESC LIMIT 10')
         rows = cur.fetchall()
         cur.close()
         conn.close()
